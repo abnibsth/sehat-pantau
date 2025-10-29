@@ -186,6 +186,7 @@ class _SmartReminderScreenState extends State<SmartReminderScreen> with TickerPr
             ),
             const SizedBox(height: 12),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Icon(
                   Icons.access_time,
@@ -193,29 +194,47 @@ class _SmartReminderScreenState extends State<SmartReminderScreen> with TickerPr
                   color: Colors.grey[600],
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  'Dibuat: ${_formatDateTime(reminder.createdAt)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: () => _markAsDone(reminder),
-                  icon: const Icon(Icons.check, size: 16),
-                  label: const Text('Selesai'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.green,
+                Expanded(
+                  child: Text(
+                    'Dibuat: ${_formatDateTime(reminder.createdAt)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: () => _dismissReminder(reminder),
-                  icon: const Icon(Icons.close, size: 16),
-                  label: const Text('Tutup'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.red,
+                Flexible(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => _markAsDone(reminder),
+                        icon: const Icon(Icons.check, size: 16),
+                        label: const Text('Selesai'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.green,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(0, 36),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _dismissReminder(reminder),
+                        icon: const Icon(Icons.close, size: 16),
+                        label: const Text('Tutup'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(0, 36),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

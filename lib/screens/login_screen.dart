@@ -33,10 +33,22 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      await _authService.login(
+      final success = await _authService.login(
         _emailController.text.trim(),
         _passwordController.text,
       );
+
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Email atau password salah'),
+              backgroundColor: Colors.red[600],
+            ),
+          );
+        }
+        return;
+      }
 
       if (mounted) {
         Navigator.pushReplacement(
@@ -88,21 +100,25 @@ class _LoginScreenState extends State<LoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.blue[600],
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.blue.withOpacity(0.3),
+                            color: Colors.blue.withOpacity(0.15),
                             spreadRadius: 2,
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.favorite,
-                        color: Colors.white,
-                        size: 60,
+                      child: const SizedBox(
+                        height: 80,
+                        width: 80,
+                        child: Icon(
+                          Icons.favorite,
+                          color: Colors.blue,
+                          size: 60,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),

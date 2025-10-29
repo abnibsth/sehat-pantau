@@ -210,23 +210,44 @@ class WeeklyChart extends StatelessWidget {
       if (value > maxValue) maxValue = value;
     }
     
+    // Jika semua data 0, berikan batas minimum agar chart tidak error
+    if (maxValue <= 0) {
+      switch (dataType) {
+        case 'sleep':
+          return 1; // jam
+        case 'calories':
+          return 100; // batas minimum yang masuk akal
+        case 'steps':
+        default:
+          return 1000; // batas minimum agar interval tidak 0
+      }
+    }
     // Tambahkan 20% padding di atas nilai maksimum
     return maxValue * 1.2;
   }
 
   double _getInterval() {
     final maxY = _getMaxY();
-    
+
+    double interval;
     switch (dataType) {
       case 'steps':
-        return maxY / 5; // 5 interval untuk langkah
+        interval = maxY / 5; // 5 interval untuk langkah
+        break;
       case 'sleep':
-        return maxY / 4; // 4 interval untuk tidur
+        interval = maxY / 4; // 4 interval untuk tidur
+        break;
       case 'calories':
-        return maxY / 5; // 5 interval untuk kalori
+        interval = maxY / 5; // 5 interval untuk kalori
+        break;
       default:
-        return maxY / 5;
+        interval = maxY / 5;
+        break;
     }
+
+    // Pastikan interval tidak nol atau negatif
+    if (interval <= 0) return 1;
+    return interval;
   }
 
   String _formatValue(double value) {

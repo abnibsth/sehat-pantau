@@ -3,6 +3,9 @@ import '../services/auth_service.dart';
 import '../models/user_data.dart';
 import 'login_screen.dart';
 import 'smart_reminder_screen.dart';
+import 'notification_settings_screen.dart';
+import 'privacy_security_screen.dart';
+import 'support_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -151,8 +154,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
           backgroundColor: Colors.blue[600],
           foregroundColor: Colors.white,
         ),
-        body: const Center(
-          child: Text('Tidak dapat memuat data pengguna'),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(Icons.person_outline, size: 72, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'Belum ada data profil',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Silakan login atau daftar untuk melihat profil Anda.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const LoginScreen()),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[600],
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Login'),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }
@@ -246,8 +291,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: 'Notifikasi',
                     subtitle: 'Kelola pengaturan notifikasi',
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Fitur notifikasi akan segera hadir')),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const NotificationSettingsScreen()),
                       );
                     },
                   ),
@@ -269,8 +315,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: 'Privasi & Keamanan',
                     subtitle: 'Kelola keamanan akun',
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Fitur keamanan akan segera hadir')),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const PrivacySecurityScreen()),
                       );
                     },
                   ),
@@ -280,8 +327,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: 'Bantuan & Dukungan',
                     subtitle: 'Dapatkan bantuan dan dukungan',
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Fitur bantuan akan segera hadir')),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SupportScreen()),
                       );
                     },
                   ),
