@@ -1,6 +1,9 @@
 import '../models/step_data.dart';
 import '../models/sleep_data.dart';
 import '../models/food_data.dart';
+import '../services/weather_service.dart';
+import '../services/mood_service.dart';
+import '../models/mood.dart';
 
 class HealthInsight {
   final String title;
@@ -25,7 +28,7 @@ class InsightService {
   factory InsightService() => _instance;
   InsightService._internal();
 
-  // Rule-based AI untuk memberikan insight kesehatan
+  // Rule-based AI untuk memberikan insight kesehatan (tanpa cuaca)
   List<HealthInsight> generateInsights({
     required List<StepData> stepHistory,
     required List<SleepData> sleepHistory,
@@ -226,6 +229,96 @@ class InsightService {
     
     // Ambil maksimal 3 insight teratas
     return insights.take(3).toList();
+  }
+
+  // Versi gabungan dengan cuaca
+  Future<List<HealthInsight>> generateInsightsWithWeather({
+    required List<StepData> stepHistory,
+    required List<SleepData> sleepHistory,
+    required List<FoodData> foodHistory,
+  }) async {
+    final base = generateInsights(
+      stepHistory: stepHistory,
+      sleepHistory: sleepHistory,
+      foodHistory: foodHistory,
+    );
+
+    try {
+      final weather = await WeatherService().fetchWeather();
+      final double temp = weather.temperatureC;
+      final int code = weather.weatherCode;
+      final int todaySteps = stepHistory.isNotEmpty ? stepHistory.first.steps : 0;
+
+      // Aturan: panas + langkah sedikit
+      if (temp > 32 && todaySteps < 4000) {
+        base.add(HealthInsight(
+          title: 'Aktivitas Turun di Hari Panas',
+          message: 'Aktivitas menurun saat suhu > 32°C.',
+          suggestion: 'Coba jalan di pagi/sore dan perbanyak hidrasi.',
+          icon: '🌞',
+          color: 'orange',
+          priority: 4,
+        ));
+      }
+
+      // Aturan: cerah + langkah meningkat
+      final bool isClear = code == 0 || {1, 2}.contains(code);
+      if (isClear && todaySteps >= 8000) {
+        base.add(HealthInsight(
+          title: 'Cuaca Cerah Mendorong Aktivitas',
+          message: 'Cuaca cerah mendukung aktivitasmu!',
+          suggestion: 'Pertahankan ritme ini, bagus untuk kebugaran.',
+          icon: '🌤️',
+          color: 'green',
+          priority: 2,
+        ));
+      }
+
+      // Cuaca dan Tidur: bandingkan tidur terakhir dengan suhu malam (pakai min temp hari ini)
+      if (sleepHistory.isNotEmpty && weather.forecast5Days.isNotEmpty) {
+        final sleepHours = sleepHistory.first.totalSleep.inHours;
+        final nightTemp = weather.forecast5Days.first.nightTemp; // asumsi malam sebelumnya
+        if (sleepHours < 6 && nightTemp > 28) {
+          base.add(HealthInsight(
+            title: 'Tidur Terganggu Panas',
+            message: 'Kualitas tidur menurun saat suhu malam > 28°C.',
+            suggestion: 'Gunakan kipas/AC, kurangi kafein malam hari, mandi air hangat.',
+            icon: '🥵',
+            color: 'red',
+            priority: 4,
+          ));
+        }
+      }
+
+      // Mood & Cuaca: korelasi sederhana 7 hari
+      final moods = await MoodService().getAll();
+      if (moods.isNotEmpty) {
+        final last7 = moods.where((m) => m.date.isAfter(DateTime.now().subtract(const Duration(days: 7)))).toList();
+        if (last7.length >= 3) {
+          final hot = last7.where((m) => (m.temperatureC ?? 0) > 32).toList();
+          final cool = last7.where((m) => (m.temperatureC ?? 0) <= 32).toList();
+          double avg(List<MoodEntry> l) => l.isEmpty ? 0 : l.map((e) => e.mood).reduce((a, b) => a + b) / l.length;
+          final avgHot = avg(hot);
+          final avgCool = avg(cool);
+          if (hot.length >= 2 && avgHot < avgCool - 0.5) {
+            base.add(HealthInsight(
+              title: 'Mood Turun di Hari Panas',
+              message: 'Rata-rata mood lebih rendah saat suhu > 32°C.',
+              suggestion: 'Kurangi aktivitas terik siang, pilih ruang sejuk, hidrasi cukup.',
+              icon: '🌞',
+              color: 'orange',
+              priority: 3,
+            ));
+          }
+        }
+      }
+    } catch (_) {
+      // Abaikan error cuaca, tetap kembalikan insight dasar
+    }
+
+    // Urutkan dan batasi 3 teratas
+    base.sort((a, b) => b.priority.compareTo(a.priority));
+    return base.take(3).toList();
   }
 
   // Method untuk mendapatkan insight berdasarkan data spesifik

@@ -3,6 +3,7 @@ import 'home_screen.dart';
 import 'food_screen.dart';
 import 'sleep_screen.dart';
 import 'profile_screen.dart';
+import 'weather_activity_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -18,6 +19,7 @@ class _MainNavigationState extends State<MainNavigation> {
     const HomeScreen(),
     const FoodScreen(),
     const SleepScreen(),
+    const WeatherActivityScreen(),
     const ProfileScreen(),
   ];
 
@@ -36,6 +38,11 @@ class _MainNavigationState extends State<MainNavigation> {
       icon: Icon(Icons.bedtime_outlined),
       selectedIcon: Icon(Icons.bedtime),
       label: 'Tidur',
+    ),
+    const NavigationDestination(
+      icon: Icon(Icons.wb_sunny_outlined),
+      selectedIcon: Icon(Icons.wb_sunny),
+      label: 'Cuaca',
     ),
     const NavigationDestination(
       icon: Icon(Icons.person_outlined),

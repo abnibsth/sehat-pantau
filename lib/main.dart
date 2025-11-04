@@ -1,9 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/main_navigation.dart';
 import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
+import 'services/supabase_service.dart';
 
-void main() {
+// TODO: Ganti dengan Supabase URL dan Anon Key Anda
+// Dapatkan dari: https://app.supabase.com -> Settings -> API
+const String supabaseUrl = 'https://ececlqlqebancgemtois.supabase.co';
+const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjZWNscWxxZWJhbmNnZW10b2lzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwMDEzMTcsImV4cCI6MjA3NzU3NzMxN30.dRbCDcxLR5ubAia8A0U-oIR1JD7K26MrJUruq0pgsbI';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Inisialisasi Supabase
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
+  );
+  
+  await initializeDateFormatting('id_ID');
   runApp(const SehatDanPantauApp());
 }
 
@@ -61,6 +78,20 @@ class _AuthWrapperState extends State<AuthWrapper> {
   void initState() {
     super.initState();
     _checkAuthStatus();
+    
+    // Listen untuk auth state changes dari Supabase
+    SupabaseService.client.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      if (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.signedOut) {
+        // Re-check auth status ketika ada perubahan
+        if (mounted) {
+          setState(() {
+            _isLoading = true;
+          });
+          _checkAuthStatus();
+        }
+      }
+    });
   }
 
   Future<void> _checkAuthStatus() async {
@@ -114,21 +145,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
       );
     }
 
-    return FutureBuilder<bool>(
-      future: _authService.isLoggedIn(),
+    return StreamBuilder<AuthState>(
+      stream: SupabaseService.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            backgroundColor: Colors.blue,
-            body: Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            ),
-          );
-        }
-
-        final isLoggedIn = snapshot.data ?? false;
+        // Ambil current session untuk cek login status
+        final session = SupabaseService.client.auth.currentSession;
+        final isLoggedIn = session != null;
         
         if (isLoggedIn) {
           return const MainNavigation();

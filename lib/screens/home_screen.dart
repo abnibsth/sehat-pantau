@@ -3,7 +3,7 @@ import '../services/step_service.dart';
 import '../services/sleep_service.dart';
 import '../services/food_service.dart';
 import '../services/insight_service.dart';
-import '../services/smart_reminder_service.dart';
+import '../services/weather_service.dart';
 import '../services/activity_monitor_service.dart';
 import '../widgets/health_card.dart';
 import '../widgets/insight_card.dart';
@@ -14,7 +14,8 @@ import 'nutrition_screen.dart';
 import 'food_list_screen.dart';
 import 'weekly_summary_screen.dart';
 import 'gamification_screen.dart';
-import 'smart_reminder_screen.dart';
+import 'weather_activity_screen.dart';
+import 'mood_weather_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,7 +29,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final SleepService _sleepService = SleepService();
   final FoodService _foodService = FoodService();
   final InsightService _insightService = InsightService();
-  final SmartReminderService _reminderService = SmartReminderService();
   final ActivityMonitorService _monitorService = ActivityMonitorService();
 
   int _currentSteps = 0;
@@ -73,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final foodHistory = await _foodService.getFoodHistory(1);
       final todayFood = await _foodService.getFoodHistoryForDate(DateTime.now());
 
-      final insights = _insightService.generateInsights(
+      final insights = await _insightService.generateInsightsWithWeather(
         stepHistory: stepHistory,
         sleepHistory: sleepHistory,
         foodHistory: foodHistory,
@@ -347,6 +347,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                       ],
                     ),
+
+                    const SizedBox(height: 16),
+
+                    // Weather quick link
+                    _buildQuickActionCard(
+                      'Lihat Detail Cuaca',
+                      Icons.wb_sunny,
+                      Colors.blue,
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const WeatherActivityScreen()),
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Mood & Cuaca entry point
+                    _buildQuickActionCard(
+                      'Mood & Cuaca',
+                      Icons.emoji_emotions,
+                      Colors.pink,
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const MoodWeatherScreen()),
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Rekomendasi Olahraga Harian
+                    _buildDailyWorkoutRecommendation(),
                   ],
                 ),
               ),
@@ -391,5 +426,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+  Widget _buildDailyWorkoutRecommendation() {
+    return FutureBuilder(
+      future: _buildWorkoutText(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const SizedBox.shrink();
+        }
+        final text = snapshot.data;
+        if (text == null) return const SizedBox.shrink();
+        return Card(
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.fitness_center, color: Colors.blue),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Rekomendasi Olahraga Hari Ini', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 6),
+                      Text(text),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<String?> _buildWorkoutText() async {
+    try {
+      final w = await WeatherService().fetchWeather();
+      final text = WeatherService().workoutRecommendation(tempC: w.temperatureC, code: w.weatherCode);
+      return text;
+    } catch (_) {}
+    return null;
   }
 }

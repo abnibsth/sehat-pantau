@@ -3,6 +3,7 @@ import 'package:pedometer/pedometer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/step_data.dart';
+import 'supabase_service.dart';
 
 class StepService {
   static final StepService _instance = StepService._internal();
@@ -14,6 +15,7 @@ class StepService {
   DateTime? _lastResetDate;
   final String _stepsKey = 'daily_steps';
   final String _lastResetKey = 'last_reset_date';
+  final _supabase = SupabaseService.client;
 
   int get currentSteps => _currentSteps;
 
@@ -86,12 +88,56 @@ class StepService {
   }
 
   Future<void> _saveStepDataToHistory(StepData stepData) async {
+    try {
+      final userId = SupabaseService().currentUserId;
+      if (userId != null) {
+        // Simpan ke Supabase
+        await _supabase.from('step_data').upsert({
+          'user_id': userId,
+          'date': stepData.date.toIso8601String().split('T')[0],
+          'steps': stepData.steps,
+          'distance': stepData.distance,
+          'calories': stepData.calories,
+        }, onConflict: 'user_id,date');
+      }
+    } catch (e) {
+      print('Error saving step data to Supabase: $e');
+    }
+    
+    // Fallback ke SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     final historyKey = 'steps_history_${stepData.date.millisecondsSinceEpoch}';
     await prefs.setString(historyKey, jsonEncode(stepData.toJson()));
   }
 
   Future<List<StepData>> getStepHistory(int days) async {
+    try {
+      final userId = SupabaseService().currentUserId;
+      if (userId != null) {
+        final startDate = DateTime.now().subtract(Duration(days: days));
+        
+        // Ambil dari Supabase
+        final response = await _supabase
+            .from('step_data')
+            .select()
+            .eq('user_id', userId)
+            .gte('date', startDate.toIso8601String().split('T')[0])
+            .order('date', ascending: false);
+        
+        if (response.isNotEmpty) {
+          return response.map((json) => StepData(
+            date: DateTime.parse(json['date']),
+            steps: json['steps'],
+            distance: (json['distance'] as num).toDouble(),
+            calories: json['calories'],
+          )).toList();
+        }
+      }
+    } catch (e) {
+      print('Error getting step history from Supabase: $e');
+    }
+    
+    // Fallback ke SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     final List<StepData> history = [];
     final now = DateTime.now();

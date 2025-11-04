@@ -1,6 +1,8 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/food_data.dart';
+import 'supabase_service.dart';
+import 'package:uuid/uuid.dart';
 
 class FoodService {
   static final FoodService _instance = FoodService._internal();
@@ -8,14 +10,81 @@ class FoodService {
   FoodService._internal();
 
   final String _foodHistoryKey = 'food_history';
+  final _supabase = SupabaseService.client;
+  final _uuid = const Uuid();
 
   Future<void> saveFoodData(FoodData foodData) async {
-    final prefs = await SharedPreferences.getInstance();
-    final historyKey = '${_foodHistoryKey}_${foodData.id}';
-    await prefs.setString(historyKey, jsonEncode(foodData.toJson()));
+    try {
+      SupabaseService().ensureAuthenticated();
+      final userId = SupabaseService().currentUserId;
+      if (userId == null) throw Exception('User tidak login');
+      
+      final foodId = foodData.id.isEmpty ? _uuid.v4() : foodData.id;
+      
+      // Simpan ke Supabase
+      await _supabase.from('food_data').upsert({
+        'id': foodId,
+        'user_id': userId,
+        'name': foodData.name,
+        'calories': foodData.calories,
+        'protein': foodData.protein,
+        'carbs': foodData.carbs,
+        'fat': foodData.fat,
+        'fiber': foodData.fiber,
+        'meal_type': foodData.mealType,
+        'date_time': foodData.dateTime.toIso8601String(),
+        'quantity': foodData.quantity,
+        'unit': foodData.unit,
+      });
+      
+      // Fallback ke local storage jika Supabase gagal
+    } catch (e) {
+      print('Error saving food data to Supabase: $e');
+      // Fallback ke SharedPreferences untuk offline support
+      final prefs = await SharedPreferences.getInstance();
+      final historyKey = '${_foodHistoryKey}_${foodData.id}';
+      await prefs.setString(historyKey, jsonEncode(foodData.toJson()));
+    }
   }
 
   Future<List<FoodData>> getFoodHistoryForDate(DateTime date) async {
+    try {
+      SupabaseService().ensureAuthenticated();
+      final userId = SupabaseService().currentUserId;
+      if (userId == null) throw Exception('User tidak login');
+      
+      final startDate = DateTime(date.year, date.month, date.day);
+      final endDate = startDate.add(const Duration(days: 1));
+      
+      // Ambil dari Supabase
+      final response = await _supabase
+          .from('food_data')
+          .select()
+          .eq('user_id', userId)
+          .gte('date_time', startDate.toIso8601String())
+          .lt('date_time', endDate.toIso8601String())
+          .order('date_time');
+      
+      if (response.isNotEmpty) {
+        return response.map((json) => FoodData.fromJson({
+          'id': json['id'],
+          'name': json['name'],
+          'calories': json['calories'],
+          'protein': json['protein'],
+          'carbs': json['carbs'],
+          'fat': json['fat'],
+          'fiber': json['fiber'],
+          'mealType': json['meal_type'],
+          'dateTime': json['date_time'],
+          'quantity': json['quantity'],
+          'unit': json['unit'],
+        })).toList();
+      }
+    } catch (e) {
+      print('Error getting food history from Supabase: $e');
+    }
+    
+    // Fallback ke SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     final List<FoodData> history = [];
     final keys = prefs.getKeys();
@@ -27,7 +96,6 @@ class FoodService {
           final foodDataJson = jsonDecode(foodDataString);
           final foodData = FoodData.fromJson(foodDataJson);
           
-          // Filter berdasarkan tanggal
           if (foodData.dateTime.year == date.year &&
               foodData.dateTime.month == date.month &&
               foodData.dateTime.day == date.day) {
@@ -37,7 +105,6 @@ class FoodService {
       }
     }
     
-    // Sort berdasarkan waktu
     history.sort((a, b) => a.dateTime.compareTo(b.dateTime));
     return history;
   }
@@ -56,6 +123,22 @@ class FoodService {
   }
 
   Future<void> deleteFoodData(String foodId) async {
+    try {
+      SupabaseService().ensureAuthenticated();
+      final userId = SupabaseService().currentUserId;
+      if (userId == null) throw Exception('User tidak login');
+      
+      // Hapus dari Supabase
+      await _supabase
+          .from('food_data')
+          .delete()
+          .eq('id', foodId)
+          .eq('user_id', userId);
+    } catch (e) {
+      print('Error deleting food data from Supabase: $e');
+    }
+    
+    // Fallback: hapus dari SharedPreferences juga
     final prefs = await SharedPreferences.getInstance();
     final historyKey = '${_foodHistoryKey}_$foodId';
     await prefs.remove(historyKey);

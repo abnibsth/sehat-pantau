@@ -37,30 +37,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      await _authService.register(
+      final success = await _authService.register(
         _nameController.text.trim(),
         _emailController.text.trim(),
         _passwordController.text,
       );
 
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Registrasi berhasil! Silakan login.'),
-            backgroundColor: Colors.green[600],
-          ),
-        );
+        if (success) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registrasi berhasil! Silakan login.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registrasi gagal. Silakan coba lagi.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
+        String errorMessage = 'Error: $e';
+        
+        // Parsing error message yang lebih user-friendly
+        if (e.toString().contains('User already registered')) {
+          errorMessage = 'Email sudah terdaftar. Silakan login atau gunakan email lain.';
+        } else if (e.toString().contains('Invalid email')) {
+          errorMessage = 'Format email tidak valid.';
+        } else if (e.toString().contains('Password')) {
+          errorMessage = 'Password terlalu pendek. Minimal 6 karakter.';
+        } else if (e.toString().contains('relation') || e.toString().contains('does not exist')) {
+          errorMessage = 'Database belum di-setup. Pastikan migration SQL sudah dijalankan di Supabase.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red[600],
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }

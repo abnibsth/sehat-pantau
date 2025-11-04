@@ -41,9 +41,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!success) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Email atau password salah'),
-              backgroundColor: Colors.red[600],
+            const SnackBar(
+              content: Text('Email atau password salah'),
+              backgroundColor: Colors.red,
             ),
           );
         }
@@ -51,23 +51,45 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
+        // Navigate ke root dan clear semua route sebelumnya
+        // Ini akan trigger AuthWrapper untuk rebuild dan detect login state
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const MainNavigation()),
+          (route) => false, // Hapus semua route sebelumnya
         );
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Login berhasil!'),
-            backgroundColor: Colors.green[600],
+          const SnackBar(
+            content: Text('Login berhasil!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
+        String errorMessage = 'Email atau password salah';
+        
+        // Parsing error message yang lebih user-friendly
+        final errorString = e.toString().toLowerCase();
+        
+        if (errorString.contains('email not confirmed') || 
+            errorString.contains('email_not_confirmed')) {
+          errorMessage = 'Email belum dikonfirmasi. Silakan cek email Anda atau disable email confirmation di Supabase Settings.';
+        } else if (errorString.contains('invalid login credentials') || 
+                   errorString.contains('invalid_credentials')) {
+          errorMessage = 'Email atau password salah. Pastikan email dan password sudah benar.';
+        } else if (errorString.contains('user not found')) {
+          errorMessage = 'Email tidak terdaftar. Silakan daftar terlebih dahulu.';
+        } else if (errorString.contains('password')) {
+          errorMessage = 'Password salah. Silakan coba lagi.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red[600],
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }

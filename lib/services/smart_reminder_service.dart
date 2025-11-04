@@ -5,6 +5,8 @@ import '../models/smart_reminder.dart';
 import '../models/step_data.dart';
 import '../models/sleep_data.dart';
 import '../models/food_data.dart';
+import '../services/weather_service.dart';
+import 'supabase_service.dart';
 
 class SmartReminderService {
   static final SmartReminderService _instance = SmartReminderService._internal();
@@ -13,9 +15,9 @@ class SmartReminderService {
 
   static const String _remindersKey = 'smart_reminders';
   static const String _settingsKey = 'reminder_settings';
-  static const String _lastActivityKey = 'last_activity_tracking';
   
   final Uuid _uuid = const Uuid();
+  final _supabase = SupabaseService.client;
 
   // Generate smart reminders berdasarkan aktivitas pengguna
   Future<List<SmartReminder>> generateSmartReminders({
@@ -67,7 +69,78 @@ class SmartReminderService {
       }
     }
 
+    // 6. Reminder Cuaca - Berdasarkan kondisi cuaca saat ini
+    final weatherReminder = await _generateWeatherReminder(now);
+    if (weatherReminder != null) {
+      reminders.add(weatherReminder);
+    }
+
     return reminders;
+  }
+
+  // Reminder berbasis cuaca
+  Future<SmartReminder?> _generateWeatherReminder(DateTime now) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastKey = 'last_weather_reminder_date';
+      final lastStr = prefs.getString(lastKey);
+      if (lastStr != null) {
+        final last = DateTime.tryParse(lastStr);
+        if (last != null && last.year == now.year && last.month == now.month && last.day == now.day) {
+          // Hanya sekali per hari
+          return null;
+        }
+      }
+
+      final weather = await WeatherService().fetchWeather();
+      final code = weather.weatherCode;
+      final temp = weather.temperatureC;
+
+      String? title;
+      String? message;
+      ReminderPriority priority = ReminderPriority.medium;
+
+      final isRain = {51, 53, 55, 61, 63, 65, 66, 67, 95, 96, 99}.contains(code);
+      final isHot = temp >= 33;
+      final isClear = code == 0 || {1, 2}.contains(code);
+
+      if (isRain) {
+        title = 'Hujan Datang 🌧️';
+        message = 'Hujan sore ini, pertimbangkan olahraga di rumah.';
+        priority = ReminderPriority.medium;
+      } else if (isHot) {
+        title = 'Cuaca Panas 🌞';
+        final t = temp.toStringAsFixed(0);
+        message = 'Suhu $t°C, jangan lupa minum air setiap 2 jam.';
+        priority = ReminderPriority.high;
+      } else if (isClear) {
+        title = 'Cerah! 🌤️';
+        message = 'Cuaca cerah! Waktu terbaik untuk jalan pagi.';
+        priority = ReminderPriority.low;
+      }
+
+      if (title != null && message != null) {
+        await prefs.setString(lastKey, DateTime(now.year, now.month, now.day).toIso8601String());
+        return SmartReminder(
+          id: _uuid.v4(),
+          title: title,
+          message: message,
+          type: ReminderType.weather,
+          priority: priority,
+          createdAt: now,
+          context: {
+            'temperature_c': temp,
+            'weather_code': code,
+            'location': weather.locationName,
+          },
+        );
+      }
+    } catch (_) {
+      // Abaikan error cuaca agar tidak mengganggu reminder lain
+      return null;
+    }
+
+    return null;
   }
 
   // Generate reminder makan berdasarkan pola makan
@@ -318,10 +391,32 @@ class SmartReminderService {
 
   // Simpan reminder
   Future<void> saveReminder(SmartReminder reminder) async {
+    try {
+      final userId = SupabaseService().currentUserId;
+      if (userId != null) {
+        // Simpan ke Supabase
+        await _supabase.from('smart_reminders').upsert({
+          'id': reminder.id,
+          'user_id': userId,
+          'title': reminder.title,
+          'message': reminder.message,
+          'type': reminder.type.toString().split('.').last,
+          'priority': reminder.priority.toString().split('.').last,
+          'created_at': reminder.createdAt.toIso8601String(),
+          'triggered_at': reminder.triggeredAt?.toIso8601String(),
+          'is_active': reminder.isActive,
+          'context': reminder.context,
+        });
+        return;
+      }
+    } catch (e) {
+      print('Error saving reminder to Supabase: $e');
+    }
+    
+    // Fallback ke SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     final reminders = await getReminders();
     
-    // Cek apakah reminder sudah ada
     final existingIndex = reminders.indexWhere((r) => r.id == reminder.id);
     
     if (existingIndex >= 0) {
@@ -335,6 +430,46 @@ class SmartReminderService {
 
   // Ambil semua reminders
   Future<List<SmartReminder>> getReminders() async {
+    try {
+      final userId = SupabaseService().currentUserId;
+      if (userId != null) {
+        // Ambil dari Supabase
+        final response = await _supabase
+            .from('smart_reminders')
+            .select()
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
+        
+        if (response.isNotEmpty) {
+          return response.map((json) {
+            // Buat SmartReminder langsung dengan enum
+            return SmartReminder(
+              id: json['id'],
+              title: json['title'],
+              message: json['message'],
+              type: ReminderType.values.firstWhere(
+                (e) => e.toString().split('.').last == json['type'],
+                orElse: () => ReminderType.meal,
+              ),
+              priority: ReminderPriority.values.firstWhere(
+                (e) => e.toString().split('.').last == json['priority'],
+                orElse: () => ReminderPriority.medium,
+              ),
+              createdAt: DateTime.parse(json['created_at']),
+              triggeredAt: json['triggered_at'] != null 
+                  ? DateTime.parse(json['triggered_at']) 
+                  : null,
+              isActive: json['is_active'] ?? true,
+              context: Map<String, dynamic>.from(json['context'] ?? {}),
+            );
+          }).toList();
+        }
+      }
+    } catch (e) {
+      print('Error getting reminders from Supabase: $e');
+    }
+    
+    // Fallback ke SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     final remindersString = prefs.getString(_remindersKey);
     
@@ -379,12 +514,67 @@ class SmartReminderService {
 
   // Simpan pengaturan reminder
   Future<void> saveReminderSettings(ReminderSettings settings) async {
+    try {
+      final userId = SupabaseService().currentUserId;
+      if (userId != null) {
+        // Simpan ke Supabase
+        await _supabase.from('reminder_settings').upsert({
+          'user_id': userId,
+          'enable_meal_reminders': settings.enableMealReminders,
+          'enable_movement_reminders': settings.enableMovementReminders,
+          'enable_sleep_reminders': settings.enableSleepReminders,
+          'enable_water_reminders': settings.enableWaterReminders,
+          'enable_break_reminders': settings.enableBreakReminders,
+          'meal_interval_hours': settings.mealIntervalHours,
+          'movement_interval_minutes': settings.movementIntervalMinutes,
+          'water_interval_minutes': settings.waterIntervalMinutes,
+          'break_interval_minutes': settings.breakIntervalMinutes,
+          'quiet_hours': settings.quietHours,
+          'updated_at': DateTime.now().toIso8601String(),
+        }, onConflict: 'user_id');
+        return;
+      }
+    } catch (e) {
+      print('Error saving reminder settings to Supabase: $e');
+    }
+    
+    // Fallback ke SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_settingsKey, jsonEncode(settings.toJson()));
   }
 
   // Ambil pengaturan reminder
   Future<ReminderSettings> getReminderSettings() async {
+    try {
+      final userId = SupabaseService().currentUserId;
+      if (userId != null) {
+        // Ambil dari Supabase
+        final response = await _supabase
+            .from('reminder_settings')
+            .select()
+            .eq('user_id', userId)
+            .maybeSingle();
+        
+        if (response != null) {
+          return ReminderSettings.fromJson({
+            'enableMealReminders': response['enable_meal_reminders'],
+            'enableMovementReminders': response['enable_movement_reminders'],
+            'enableSleepReminders': response['enable_sleep_reminders'],
+            'enableWaterReminders': response['enable_water_reminders'],
+            'enableBreakReminders': response['enable_break_reminders'],
+            'mealIntervalHours': response['meal_interval_hours'],
+            'movementIntervalMinutes': response['movement_interval_minutes'],
+            'waterIntervalMinutes': response['water_interval_minutes'],
+            'breakIntervalMinutes': response['break_interval_minutes'],
+            'quietHours': response['quiet_hours'],
+          });
+        }
+      }
+    } catch (e) {
+      print('Error getting reminder settings from Supabase: $e');
+    }
+    
+    // Fallback ke SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     final settingsString = prefs.getString(_settingsKey);
     

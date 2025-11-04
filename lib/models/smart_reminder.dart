@@ -6,6 +6,7 @@ enum ReminderType {
   sleep,       // Tidur
   water,       // Minum air
   rest,        // Istirahat
+  weather,     // Cuaca
 }
 
 enum ReminderPriority {
@@ -111,6 +112,8 @@ class SmartReminder {
         return '💧';
       case ReminderType.rest:
         return '☕';
+      case ReminderType.weather:
+        return '🌤️';
     }
   }
 
