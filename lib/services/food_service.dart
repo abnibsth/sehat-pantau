@@ -19,7 +19,11 @@ class FoodService {
       final userId = SupabaseService().currentUserId;
       if (userId == null) throw Exception('User tidak login');
       
-      final foodId = foodData.id.isEmpty ? _uuid.v4() : foodData.id;
+      // Pastikan kolom id bertipe UUID yang valid untuk Supabase
+      // Banyak pemanggilan UI mengirim id berbentuk timestamp string.
+      // Jika id tidak valid UUID, paksa generate UUID v4 baru.
+      final bool isValidUuid = Uuid.isValidUUID(fromString: foodData.id);
+      final foodId = (foodData.id.isEmpty || !isValidUuid) ? _uuid.v4() : foodData.id;
       
       // Simpan ke Supabase
       await _supabase.from('food_data').upsert({
@@ -32,10 +36,12 @@ class FoodService {
         'fat': foodData.fat,
         'fiber': foodData.fiber,
         'meal_type': foodData.mealType,
-        'date_time': foodData.dateTime.toIso8601String(),
+        // Gunakan UTC untuk konsistensi filter di Supabase (timestamptz)
+        'date_time': foodData.dateTime.toUtc().toIso8601String(),
         'quantity': foodData.quantity,
         'unit': foodData.unit,
       });
+      print('Food data saved to Supabase: id=$foodId, user=$userId');
       
       // Fallback ke local storage jika Supabase gagal
     } catch (e) {
@@ -54,15 +60,17 @@ class FoodService {
       if (userId == null) throw Exception('User tidak login');
       
       final startDate = DateTime(date.year, date.month, date.day);
-      final endDate = startDate.add(const Duration(days: 1));
+      // Gunakan UTC untuk konsistensi dengan penyimpanan
+      final startDateUtc = startDate.toUtc();
+      final endDateUtc = startDateUtc.add(const Duration(days: 1));
       
       // Ambil dari Supabase
       final response = await _supabase
           .from('food_data')
           .select()
           .eq('user_id', userId)
-          .gte('date_time', startDate.toIso8601String())
-          .lt('date_time', endDate.toIso8601String())
+          .gte('date_time', startDateUtc.toIso8601String())
+          .lt('date_time', endDateUtc.toIso8601String())
           .order('date_time');
       
       if (response.isNotEmpty) {

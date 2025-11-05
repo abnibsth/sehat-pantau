@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/step_service.dart';
+import '../models/step_data.dart';
 import '../services/sleep_service.dart';
 import '../services/food_service.dart';
 import '../services/insight_service.dart';
@@ -79,8 +80,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         foodHistory: foodHistory,
       );
 
+      // Gunakan data yang sudah ada di history untuk hari ini jika tersedia
+      final now = DateTime.now();
+      final todayStepsEntry = stepHistory.firstWhere(
+        (s) => s.date.year == now.year && s.date.month == now.month && s.date.day == now.day,
+        orElse: () => StepData(date: DateTime(now.year, now.month, now.day), steps: 0, distance: 0, calories: 0),
+      );
+
       setState(() {
-        _currentSteps = _stepService.currentSteps;
+        _currentSteps = todayStepsEntry.steps > 0 ? todayStepsEntry.steps : _stepService.currentSteps;
         _averageSleepHours = _sleepService.getAverageSleepHours(sleepHistory);
         _dailyCalories = _foodService.getDailyNutrition(todayFood)['calories'] ?? 0.0;
         _dailyFoodCount = todayFood.length;
